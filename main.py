@@ -7,7 +7,7 @@ from environment.pendulum import make_env
 from environment.rollout import rollout, collect_rollout
 from dqn.network import QNetwork
 from dqn.buffer import ReplayBuffer
-from utils.visualize import visualize_trajectory
+from utils.visualize import visualize_trajectory, visualize_td_error
 
 n_actions = 11
 state_dim = 3
@@ -48,8 +48,9 @@ def dqn_loss(params, target_params, batch, gamma):
     target = batch["reward"] + gamma * next_q_max * (1.0 - batch["done"])
     #loss = jnp.mean((q_action - target) ** 2)
     loss = jnp.mean(optax.huber_loss(q_action, target, delta=1.0))
+    td_error = q_action - target
 
-    return loss
+    return loss, td_error
 
 def update_target(params, target_params, tau=1.0):
     return jax.tree_util.tree_map(
@@ -65,12 +66,16 @@ def update_target(params, target_params, tau=1.0):
 
 @jax.jit
 def train_step(params, target_params, opt_state, batch, gamma):
-    loss, grads = jax.value_and_grad(dqn_loss)(params, target_params, batch, gamma)
+    (loss, td_error), grads = jax.value_and_grad(
+        lambda p: dqn_loss(p, target_params, batch, gamma), 
+        has_aux=True
+    )(params)
     updates, opt_state = optimizer.update(grads, opt_state)
     params = optax.apply_updates(params, updates)
     
-    return params, opt_state, loss
+    return params, opt_state, loss, td_error
 
+td_errors = []
 
 for episode in range(train_episodes):
     key, key_rollout = jr.split(key)
@@ -79,19 +84,26 @@ for episode in range(train_episodes):
     if len(replay_buffer) > batch_size:
         for _ in range(min(4, len(replay_buffer) // batch_size)):
             batch = replay_buffer.sample(batch_size)
-            params, opt_state, loss = train_step(
+            params, opt_state, loss, td_error = train_step(
                 params, target_params, opt_state, batch, gamma
             )
+            td_errors.append(jnp.abs(td_error).mean())
     
-    if episode % 100 == 0:
+    if episode % 50 == 0:
         target_params = params
 
     epsilon = max(min_epsilon, epsilon * epsilon_decay)
 
     if episode % 20 == 0:
-        print(f"episode: {episode}, loss: {loss:.4f}")
+        if len(td_errors) > 0:
+            td = jnp.array(td_errors[-100:])
+            avg_td_error = jnp.mean(td)
+        else:
+            avg_td_error = 0.0
+        print(f"episode: {episode}, loss: {loss:.4f}, td error {avg_td_error:.4f}")
 
 # Visualize after training
 key, key_eval = jr.split(key)
 traj_post = jit_rollout(key_eval, env, q_net, actions, params, env_params, 200, epsilon=0.0)
 visualize_trajectory(traj_post)
+visualize_td_error(td_errors)

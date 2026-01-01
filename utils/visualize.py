@@ -42,3 +42,16 @@ def visualize_trajectory(traj, discrete_actions=None):
     now = datetime.now()
     filename = "result_" + now.strftime("%d-%m, %H %M %S") + ".png"
     fig.savefig(folder_path / filename)
+
+
+def visualize_td_error(errors):
+    fig, axes = plt.subplots(1, 1, figsize=(8, 4))
+    axes.plot(errors)
+    axes.set_xlabel("Training Step")
+    axes.set_ylabel("TD Error")
+    axes.set_title("TD Error During Training")
+
+    folder_path = Path(__file__).resolve().parent.parent / "figures"
+    now = datetime.now()
+    filename = "td_error_" + now.strftime("%d-%m, %H %M %S") + ".png"
+    fig.savefig(folder_path / filename)
