@@ -55,3 +55,21 @@ def visualize_td_error(errors):
     now = datetime.now()
     filename = "td_error_" + now.strftime("%d-%m, %H %M %S") + ".png"
     fig.savefig(folder_path / filename)
+
+
+def visualize_cum_reward(traj):
+    obs, actions, rewards, next_obs, done = traj
+    T = obs.shape[0]
+    t = jnp.arange(T)
+    cum_reward = jnp.cumsum(rewards)
+
+    fig, axes = plt.subplots(1, 1, figsize=(8, 4))
+    axes.plot(t, cum_reward)
+    axes.set_xlabel("T")
+    axes.set_ylabel("Cumulative Reward")
+    axes.set_title("Cumulative Reward over time")
+
+    folder_path = Path(__file__).resolve().parent.parent / "figures"
+    now = datetime.now()
+    filename = "cum_reward_" + now.strftime("%d-%m, %H %M %S") + ".png"
+    fig.savefig(folder_path / filename)
